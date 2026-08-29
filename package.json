@@ -1,28 +1,32 @@
 {
-  "name": "wacrm",
-  "version": "0.8.0",
+  "name": "aabar-crm",
+  "version": "0.8.0-abar.1",
   "private": true,
-  "description": "Self-hostable CRM template for WhatsApp built on Next.js and Supabase — shared inbox, contacts, sales pipelines, broadcasts, and no-code automations.",
+  "description": "ABAR CRM — Omnichannel CRM for travel and tourism with unified inbox, multi-number WhatsApp, AI agents, supplier management, knowledge base, automations, and secure document collection.",
   "license": "MIT",
   "author": "Arnas Donauskas",
-  "homepage": "https://github.com/ArnasDon/wacrm",
+  "homepage": "https://github.com/AmerGalkatheri/Aaber-crm",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ArnasDon/wacrm.git"
+    "url": "git+https://github.com/AmerGalkatheri/Aaber-crm.git"
   },
   "bugs": {
-    "url": "https://github.com/ArnasDon/wacrm/issues"
+    "url": "https://github.com/AmerGalkatheri/Aaber-crm/issues"
   },
   "keywords": [
     "crm",
+    "travel",
+    "tourism",
+    "omnichannel",
     "whatsapp",
-    "whatsapp-business-api",
-    "nextjs",
+    "instagram",
+    "messenger",
     "supabase",
     "automation",
-    "broadcast",
-    "self-hosted",
-    "template"
+    "ai-agents",
+    "suppliers",
+    "secure-documents",
+    "self-hosted"
   ],
   "engines": {
     "node": ">=20.0.0"
