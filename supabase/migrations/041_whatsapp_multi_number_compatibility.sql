@@ -4,6 +4,11 @@
 -- multi-channel account model without deleting legacy data.
 -- ============================================================
 
+-- Business-facing name. The number remains a provider identifier;
+-- employees should see this name in the ABAR UI.
+ALTER TABLE whatsapp_config
+  ADD COLUMN IF NOT EXISTS display_name TEXT NOT NULL DEFAULT 'WhatsApp';
+
 -- The legacy table originally enforced one configuration per user.
 -- Multi-number WhatsApp is now represented by channel_accounts.
 -- Remove only the legacy user uniqueness constraint so additional
