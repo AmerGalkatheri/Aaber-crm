@@ -1,0 +1,24 @@
+app = "wacrm-app-sa" # يمكنك تغيير هذا الاسم بشرط أن يكون فريداً بالإنجليزية
+primary_region = "fra" # سيرفر فرانكفورت (الأقرب للشرق الأوسط)
+
+[build]
+
+[env]
+  PORT = "3000"
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 3000
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 25
+    soft_limit = 20
