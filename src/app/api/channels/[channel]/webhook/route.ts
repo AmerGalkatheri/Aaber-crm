@@ -1,6 +1,7 @@
 import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { channelAdapters } from '@/lib/channels/adapters'
+import { processInboundEvent } from '@/lib/omnichannel/process-event'
 import type { Channel } from '@/lib/omnichannel/core'
 
 export const maxDuration = 30
@@ -33,8 +34,20 @@ export async function POST(request: Request, { params }: Params) {
   after(async () => {
     const db = admin()
     for (const event of events) {
-      const { error } = await db.from('channel_events').upsert({ channel_account_id: accountId, event_key: `${event.channel}:${event.accountId}:${event.externalMessageId}`, event_type: 'message.received', payload: event.raw }, { onConflict: 'event_key', ignoreDuplicates: true })
-      if (error) console.error('[channel-webhook] event persistence failed', error)
+      const eventKey = `${event.channel}:${event.accountId}:${event.externalMessageId}`
+      const inserted = await db.from('channel_events').upsert({ channel_account_id: accountId, event_key: eventKey, event_type: 'message.received', payload: event.raw }, { onConflict: 'event_key', ignoreDuplicates: true }).select('id').maybeSingle()
+      if (inserted.error) {
+        console.error('[channel-webhook] event persistence failed', inserted.error)
+        continue
+      }
+      try {
+        await processInboundEvent(event)
+        await db.from('channel_events').update({ processed_at: new Date().toISOString(), error: null }).eq('event_key', eventKey)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        await db.from('channel_events').update({ error: message }).eq('event_key', eventKey)
+        console.error('[channel-webhook] event processing failed', error)
+      }
     }
   })
   return NextResponse.json({ status: 'received', accepted: events.length }, { status: 200 })
