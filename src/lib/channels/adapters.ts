@@ -75,10 +75,9 @@ export class InstagramAdapter extends BaseMetaAdapter {
   receiveEvent(payload: unknown, accountId: string) { return normalizeMeta(payload, accountId, this.channel) }
 }
 
-/** WhatsApp's mature webhook/send stack remains intact; this is the common adapter contract. */
 export class WhatsAppAdapter extends BaseMetaAdapter {
   readonly channel = 'whatsapp' as const
-  receiveEvent(payload: unknown, accountId: string) { return normalizeMeta(payload, accountId, this.channel) }
+  receiveEvent(payload: unknown, accountId: string) { return normalizeWhatsApp(payload, accountId) }
 }
 
 function normalizeMeta(payload: unknown, accountId: string, channel: Channel): NormalizedEvent[] {
@@ -88,12 +87,70 @@ function normalizeMeta(payload: unknown, accountId: string, channel: Channel): N
     for (const item of entry.messaging ?? []) {
       const sender = item.sender as { id?: string } | undefined
       const recipient = item.recipient as { id?: string } | undefined
-      const message = item.message as { mid?: string; text?: string; attachments?: Array<{ payload?: { url?: string } }> } | undefined
+      const message = item.message as { mid?: string; text?: string; attachments?: Array<{ type?: string; payload?: { url?: string } }> } | undefined
       if (!sender?.id || !message?.mid) continue
-      events.push({ channel, accountId, externalConversationId: sender.id, externalMessageId: message.mid, externalCustomerId: sender.id, direction: recipient?.id === accountId ? 'inbound' : 'outbound', text: message.text, mediaUrl: message.attachments?.[0]?.payload?.url, timestamp: new Date(Number(item.timestamp ?? Date.now())).toISOString(), raw: item })
+      events.push({ channel, accountId, externalConversationId: sender.id, externalMessageId: message.mid, externalCustomerId: sender.id, direction: recipient?.id === accountId ? 'inbound' : 'outbound', text: message.text, mediaUrl: message.attachments?.[0]?.payload?.url, timestamp: toIso(item.timestamp), raw: item })
     }
   }
   return events
+}
+
+type WhatsAppMessage = {
+  id?: string
+  from?: string
+  timestamp?: string
+  type?: string
+  text?: { body?: string }
+  image?: { link?: string; caption?: string }
+  video?: { link?: string; caption?: string }
+  audio?: { link?: string }
+  document?: { link?: string; filename?: string; caption?: string }
+  sticker?: { link?: string }
+}
+
+type WhatsAppChange = {
+  field?: string
+  value?: {
+    metadata?: { phone_number_id?: string }
+    contacts?: Array<{ wa_id?: string; profile?: { name?: string } }>
+    messages?: WhatsAppMessage[]
+    statuses?: unknown[]
+  }
+}
+
+function normalizeWhatsApp(payload: unknown, accountId: string): NormalizedEvent[] {
+  const root = payload as { entry?: Array<{ id?: string; changes?: WhatsAppChange[] }> }
+  const events: NormalizedEvent[] = []
+  for (const entry of root.entry ?? []) {
+    for (const change of entry.changes ?? []) {
+      if (change.field !== 'messages' || !change.value?.messages) continue
+      const value = change.value
+      const contact = value.contacts?.[0]
+      for (const message of value.messages) {
+        if (!message.id || !message.from) continue
+        const media = message.image?.link ?? message.video?.link ?? message.audio?.link ?? message.document?.link ?? message.sticker?.link
+        const text = message.text?.body ?? message.image?.caption ?? message.video?.caption ?? message.document?.caption
+        events.push({
+          channel: 'whatsapp',
+          accountId,
+          externalConversationId: message.from,
+          externalMessageId: message.id,
+          externalCustomerId: contact?.wa_id ?? message.from,
+          direction: 'inbound',
+          text,
+          mediaUrl: media,
+          timestamp: toIso(message.timestamp ? Number(message.timestamp) * 1000 : undefined),
+          raw: { ...message, phone_number_id: value.metadata?.phone_number_id, contact },
+        })
+      }
+    }
+  }
+  return events
+}
+
+function toIso(value?: number | string) {
+  const timestamp = typeof value === 'string' ? Number(value) : value
+  return new Date(Number.isFinite(timestamp) && timestamp ? timestamp : Date.now()).toISOString()
 }
 
 export const channelAdapters: Record<Channel, ChannelAdapter> = {
