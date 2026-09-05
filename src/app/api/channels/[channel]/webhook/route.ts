@@ -35,11 +35,28 @@ export async function POST(request: Request, { params }: Params) {
     const db = admin()
     for (const event of events) {
       const eventKey = `${event.channel}:${event.accountId}:${event.externalMessageId}`
-      const inserted = await db.from('channel_events').upsert({ channel_account_id: accountId, event_key: eventKey, event_type: 'message.received', payload: event.raw }, { onConflict: 'event_key', ignoreDuplicates: true }).select('id').maybeSingle()
-      if (inserted.error) {
-        console.error('[channel-webhook] event persistence failed', inserted.error)
+      const existing = await db.from('channel_events').select('id, processed_at, error').eq('event_key', eventKey).maybeSingle()
+      if (existing.error) {
+        console.error('[channel-webhook] event lookup failed', existing.error)
         continue
       }
+      if (existing.data?.processed_at) continue
+
+      const persisted = existing.data ?? (await db.from('channel_events').insert({
+        channel_account_id: accountId,
+        event_key: eventKey,
+        event_type: 'message.received',
+        payload: event.raw,
+      }).select('id, processed_at, error').maybeSingle()).data
+      if (!persisted) {
+        const retry = await db.from('channel_events').select('id, processed_at, error').eq('event_key', eventKey).maybeSingle()
+        if (retry.error || retry.data?.processed_at) continue
+        if (!retry.data) {
+          console.error('[channel-webhook] event persistence failed', retry.error)
+          continue
+        }
+      }
+
       try {
         await processInboundEvent(event)
         await db.from('channel_events').update({ processed_at: new Date().toISOString(), error: null }).eq('event_key', eventKey)
